@@ -15,10 +15,15 @@ namespace Plugin\ChatGpt\Tests\Web\Admin;
 
 use Eccube\Common\Constant;
 use Eccube\Tests\Web\Admin\AbstractAdminWebTestCase;
+use Plugin\ChatGpt\Entity\ChatGpt;
+use Plugin\ChatGpt\Repository\ChatGptRepository;
 use Symfony\Component\Filesystem\Filesystem;
 
 class ChatGptControllerTest extends AbstractAdminWebTestCase
 {
+    /** @var ChatGptRepository */
+    private $chatGptRepository;
+
     public function setUp(): void
     {
         parent::setUp();
@@ -26,11 +31,12 @@ class ChatGptControllerTest extends AbstractAdminWebTestCase
         $envFile = static::getContainer()->getParameter('kernel.project_dir').'/.env';
         $fs = new Filesystem();
         $fs->copy($envFile, $envFile.'.backup');
+
+        $this->chatGptRepository = static::getContainer()->get(ChatGptRepository::class);
     }
 
     public function tearDown(): void
     {
-        // envファイルを戻す
         $envFile = static::getContainer()->getParameter('kernel.project_dir').'/.env';
         $fs = new Filesystem();
         $fs->rename($envFile.'.backup', $envFile, true);
@@ -64,5 +70,64 @@ class ChatGptControllerTest extends AbstractAdminWebTestCase
         } else {
             self::fail(sprintf('%sが見つかりませんでした。', $key));
         }
+    }
+
+    public function test商品説明生成エンドポイントにGETリクエストは405(): void
+    {
+        $this->client->request('GET', $this->generateUrl('admin_chat_gpt_product'));
+        self::assertEquals(405, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function test商品説明生成エンドポイントにCSRFトークンなしは403(): void
+    {
+        $this->client->request(
+            'POST',
+            $this->generateUrl('admin_chat_gpt_product'),
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['prompt' => 'テスト'])
+        );
+        self::assertEquals(403, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testニュース生成エンドポイントにGETリクエストは405(): void
+    {
+        $this->client->request('GET', $this->generateUrl('admin_chat_gpt_news'));
+        self::assertEquals(405, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testニュース生成エンドポイントにCSRFトークンなしは403(): void
+    {
+        $this->client->request(
+            'POST',
+            $this->generateUrl('admin_chat_gpt_news'),
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['prompt' => 'テスト'])
+        );
+        self::assertEquals(403, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function test設定が保存される(): void
+    {
+        $this->client->request('POST', $this->generateUrl('admin_chat_gpt_config'), [
+            'chat_gpt' => [
+                'apiKey' => 'sk-test-api-key',
+                'model' => 'gpt-4o',
+                'product' => '商品説明用のシステムプロンプト',
+                'news' => 'ニュース用のシステムプロンプト',
+                Constant::TOKEN_NAME => 'dummy',
+            ],
+        ]);
+
+        /** @var ChatGpt $chatGpt */
+        $chatGpt = $this->chatGptRepository->get(ChatGpt::ID);
+
+        self::assertEquals('sk-test-api-key', $chatGpt->getApiKey());
+        self::assertEquals('gpt-4o', $chatGpt->getModel());
+        self::assertEquals('商品説明用のシステムプロンプト', $chatGpt->getProduct());
+        self::assertEquals('ニュース用のシステムプロンプト', $chatGpt->getNews());
     }
 }
