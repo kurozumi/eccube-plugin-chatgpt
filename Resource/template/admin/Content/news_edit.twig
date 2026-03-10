@@ -1,61 +1,280 @@
-<div class="row" id="chat">
+<style>
+.chat-container {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    margin-bottom: 1rem;
+}
+
+.chat-header {
+    background: #495057;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px 8px 0 0;
+    font-weight: bold;
+}
+
+.chat-messages {
+    height: 300px;
+    overflow-y: auto;
+    padding: 16px;
+    background: white;
+}
+
+.chat-message {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-message.user {
+    align-items: flex-end;
+}
+
+.chat-message.assistant {
+    align-items: flex-start;
+}
+
+.chat-bubble {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.chat-message.user .chat-bubble {
+    background: #0d6efd;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.chat-message.assistant .chat-bubble {
+    background: #e9ecef;
+    color: #212529;
+    border-bottom-left-radius: 4px;
+}
+
+.chat-label {
+    font-size: 11px;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+
+.chat-input-area {
+    padding: 12px;
+    border-top: 1px solid #dee2e6;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+}
+
+.chat-typing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 14px;
+    background: #e9ecef;
+    border-radius: 16px;
+    width: fit-content;
+}
+
+.chat-typing span {
+    width: 8px;
+    height: 8px;
+    background: #6c757d;
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
+}
+
+.chat-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+</style>
+
+<div class="row mb-3" id="chat">
     <div class="col-3">
-        <div class="d-inline-block">
-            <span>ChatGPTで本文を作成する</span>
-        </div>
+        <span>ChatGPTで本文を作成</span>
     </div>
-    <div class="col mb-2">
-        <div>
-            <div id="chat-log"></div>
-            <textarea type="text" id="user-input" class="form-control mb-2" rows="8"
-                      placeholder="文章を入力してください"></textarea>
-            <input type="button" id="send-button" class="btn btn-primary" value="ChatGPTにメッセージを送信する">
+    <div class="col">
+        <div class="chat-container">
+            <div class="chat-header">
+                <i class="fa fa-robot me-2"></i>AI アシスタント
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-message assistant">
+                    <span class="chat-label">AI アシスタント</span>
+                    <div class="chat-bubble">
+                        こんにちは！ニュース記事の作成をお手伝いします。
+                        タイトルや内容を教えてください。
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <textarea id="chat-input" class="form-control mb-2" rows="3"
+                          placeholder="例: この内容でニュース記事を作成してください"></textarea>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="chat-actions">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-chat">
+                            <i class="fa fa-trash me-1"></i>履歴クリア
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="btn-apply-text">
+                            <i class="fa fa-check me-1"></i>本文に反映
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-primary" id="btn-send-chat">
+                        <i class="fa fa-paper-plane me-1"></i>送信
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-    $(function () {
-        $('#newsForm .card-body').append($('#chat'));
+$(function () {
+    $('#newsForm .card-body').append($('#chat'));
 
-        let conversationHistory = [];
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const btnSend = document.getElementById('btn-send-chat');
+    const btnClear = document.getElementById('btn-clear-chat');
+    const btnApply = document.getElementById('btn-apply-text');
+    const descriptionField = document.getElementById('admin_news_description');
 
-        async function getChatResponse(userInput) {
-            const history = conversationHistory.concat(userInput).join('\n');
+    let conversationHistory = [];
+    let lastAssistantMessage = '';
+
+    function addMessage(content, role) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${role}`;
+
+        const label = document.createElement('span');
+        label.className = 'chat-label';
+        label.textContent = role === 'user' ? 'あなた' : 'AI アシスタント';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.textContent = content;
+
+        messageDiv.appendChild(label);
+        messageDiv.appendChild(bubble);
+        chatMessages.appendChild(messageDiv);
+
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (role === 'assistant') {
+            lastAssistantMessage = content;
+        }
+    }
+
+    function showTyping() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'chat-message assistant';
+        typingDiv.id = 'typing-indicator';
+
+        const typing = document.createElement('div');
+        typing.className = 'chat-typing';
+        typing.innerHTML = '<span></span><span></span><span></span>';
+
+        typingDiv.appendChild(typing);
+        chatMessages.appendChild(typingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function hideTyping() {
+        const typing = document.getElementById('typing-indicator');
+        if (typing) typing.remove();
+    }
+
+    async function sendMessage() {
+        const userInput = chatInput.value.trim();
+        if (!userInput) return;
+
+        const newsTitle = document.querySelector('input[name="admin_news[title]"]')?.value;
+        let prompt = userInput;
+        if (newsTitle && conversationHistory.length === 0) {
+            prompt = `タイトル: ${newsTitle}\n\n${userInput}`;
+        }
+
+        addMessage(userInput, 'user');
+        chatInput.value = '';
+        btnSend.disabled = true;
+
+        showTyping();
+
+        try {
+            const history = conversationHistory.concat(prompt).join('\n');
+
             const response = await fetch('{{ path('admin_chat_gpt_news') }}', {
                 method: 'POST',
                 headers: {
                     'ECCUBE-CSRF-TOKEN': $('meta[name="eccube-csrf-token"]').attr('content'),
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    'prompt': history
-                })
+                body: JSON.stringify({ prompt: history })
             });
 
             const data = await response.json();
-            conversationHistory.push(userInput);
-            return data.error ? data.error.message : data.choices[0].message.content.trim();
+            hideTyping();
+
+            if (data.error) {
+                addMessage('エラー: ' + data.error.message, 'assistant');
+            } else {
+                const assistantMessage = data.choices[0].message.content.trim();
+                addMessage(assistantMessage, 'assistant');
+                conversationHistory.push(prompt);
+                conversationHistory.push(assistantMessage);
+            }
+        } catch (error) {
+            hideTyping();
+            addMessage('通信エラーが発生しました。', 'assistant');
         }
 
-        document.getElementById('send-button').addEventListener('click', async () => {
-            const userInput = document.getElementById('user-input').value;
-            const chatLog = document.getElementById('chat-log');
-            const userMessageElement = document.createElement('div');
-            userMessageElement.innerText = `あなた: ${userInput}`;
-            chatLog.appendChild(userMessageElement);
+        btnSend.disabled = false;
+    }
 
-            const botResponse = await getChatResponse(userInput);
-            const botMessageElement = document.createElement('div');
-            if (botResponse.error) {
-                botMessageElement.innerText = `ChatGPT: ${botResponse}`;
-                chatLog.appendChild(botMessageElement);
-            } else {
-                const textarea = document.getElementById('admin_news_description');
-                textarea.value = botResponse;
-            }
+    btnSend.addEventListener('click', sendMessage);
 
-            document.getElementById('user-input').value = '';
-        });
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            sendMessage();
+        }
     });
+
+    btnClear.addEventListener('click', () => {
+        conversationHistory = [];
+        lastAssistantMessage = '';
+        chatMessages.innerHTML = `
+            <div class="chat-message assistant">
+                <span class="chat-label">AI アシスタント</span>
+                <div class="chat-bubble">
+                    こんにちは！ニュース記事の作成をお手伝いします。
+                    タイトルや内容を教えてください。
+                </div>
+            </div>
+        `;
+    });
+
+    btnApply.addEventListener('click', () => {
+        if (!lastAssistantMessage) {
+            alert('反映するメッセージがありません');
+            return;
+        }
+        if (descriptionField.value && !confirm('既存の本文を上書きしますか？')) {
+            return;
+        }
+        descriptionField.value = lastAssistantMessage;
+    });
+});
 </script>
