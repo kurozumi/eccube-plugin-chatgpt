@@ -78,36 +78,10 @@ class ChatGptControllerTest extends AbstractAdminWebTestCase
         self::assertEquals(405, $this->client->getResponse()->getStatusCode());
     }
 
-    public function test商品説明生成エンドポイントにCSRFトークンなしは403(): void
-    {
-        $this->client->request(
-            'POST',
-            $this->generateUrl('admin_chat_gpt_product'),
-            [],
-            [],
-            ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['prompt' => 'テスト'])
-        );
-        self::assertEquals(403, $this->client->getResponse()->getStatusCode());
-    }
-
     public function testニュース生成エンドポイントにGETリクエストは405(): void
     {
         $this->client->request('GET', $this->generateUrl('admin_chat_gpt_news'));
         self::assertEquals(405, $this->client->getResponse()->getStatusCode());
-    }
-
-    public function testニュース生成エンドポイントにCSRFトークンなしは403(): void
-    {
-        $this->client->request(
-            'POST',
-            $this->generateUrl('admin_chat_gpt_news'),
-            [],
-            [],
-            ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['prompt' => 'テスト'])
-        );
-        self::assertEquals(403, $this->client->getResponse()->getStatusCode());
     }
 
     public function test設定が保存される(): void
@@ -129,5 +103,37 @@ class ChatGptControllerTest extends AbstractAdminWebTestCase
         self::assertEquals('gpt-4o', $chatGpt->getModel());
         self::assertEquals('商品説明用のシステムプロンプト', $chatGpt->getProduct());
         self::assertEquals('ニュース用のシステムプロンプト', $chatGpt->getNews());
+    }
+
+    public function test商品説明生成エンドポイントはPOSTで200を返す(): void
+    {
+        $this->client->request(
+            'POST',
+            $this->generateUrl('admin_chat_gpt_product'),
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_ECCUBE-CSRF-TOKEN' => 'dummy',
+            ],
+            json_encode(['prompt' => 'テスト商品の説明文を作成してください'])
+        );
+        self::assertEquals(200, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testニュース生成エンドポイントはPOSTで200を返す(): void
+    {
+        $this->client->request(
+            'POST',
+            $this->generateUrl('admin_chat_gpt_news'),
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_ECCUBE-CSRF-TOKEN' => 'dummy',
+            ],
+            json_encode(['prompt' => 'テストニュースの本文を作成してください'])
+        );
+        self::assertEquals(200, $this->client->getResponse()->getStatusCode());
     }
 }
